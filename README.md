@@ -6,7 +6,7 @@ A simple page where Northwood Baptist Church staff request vacation, medical and
 
 - **Cloudflare Worker** (`src/index.js`) serves the page and a small API.
 - **Cloudflare D1** database `northwood-staff-time-off` stores the staff list and requests.
-- **Cloudflare Access** handles sign-in. Only `@northwoodbaptist.com` emails can open the site, and each person sees their own name automatically.
+- **Sign-in** is built in: each person uses their church email and their own password. Pastors set a starting password in the Staff tab; the person picks their own the first time they sign in. Five wrong tries locks an account for 15 minutes.
 - The page itself is `public/index.html`.
 
 ## Who can do what

@@ -76,7 +76,12 @@ html{color-scheme:light}
 :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 body{margin:0}
 [hidden]{display:none!important}
-.signed{color:var(--muted);font-size:.85rem}
+.signed{color:var(--muted);font-size:.85rem;display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.linkbtn{background:none;border:0;padding:0;font:inherit;color:var(--accent);cursor:pointer;text-decoration:underline}
+.authbox{max-width:380px;margin:24px auto 0;width:100%}
+.authbox form{display:flex;flex-direction:column;gap:14px}
+.pwcell{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.pwcell input{width:150px}
 .who-static{padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);font-weight:500}
 </style>
 </head>
@@ -85,9 +90,33 @@ body{margin:0}
   <header>
     <h1>Staff Time Off</h1>
     <p>Northwood Baptist Church · request time away and see who's out</p>
-    <p class="signed" id="signed"></p>
+    <p class="signed" id="signed" hidden><span id="signedName"></span><button class="linkbtn" type="button" id="openPw">Change password</button><button class="linkbtn" type="button" id="signOut">Sign out</button></p>
   </header>
 
+  <section class="panel authbox" id="loginBox" hidden>
+    <h2>Sign in</h2>
+    <form id="loginForm">
+      <label>Church email <input type="email" id="lgEmail" autocomplete="username" required placeholder="you@northwoodbaptist.com"></label>
+      <label>Password <input type="password" id="lgPw" autocomplete="current-password" required></label>
+      <button class="btn primary" type="submit" id="lgBtn">Sign in</button>
+      <div id="lgMsg" class="msg bad" hidden></div>
+      <p class="hint" style="margin:0">Forgot your password? Ask Pastor Randy to set a new one for you.</p>
+    </form>
+  </section>
+
+  <section class="panel authbox" id="pwBox" hidden>
+    <h2 id="pwTitle">Change your password</h2>
+    <p class="hint" id="pwIntro" style="margin:0"></p>
+    <form id="pwForm">
+      <label>Current password <input type="password" id="pwCur" autocomplete="current-password" required></label>
+      <label>New password <input type="password" id="pwNew" autocomplete="new-password" minlength="8" required><span class="hint">At least 8 characters.</span></label>
+      <label>New password again <input type="password" id="pwNew2" autocomplete="new-password" minlength="8" required></label>
+      <div class="row"><button class="btn primary" type="submit" id="pwBtn">Save password</button><button class="btn" type="button" id="pwCancel">Cancel</button></div>
+      <div id="pwMsg" class="msg" hidden></div>
+    </form>
+  </section>
+
+  <div id="app" class="wrap" style="gap:18px" hidden>
   <nav class="tabs" role="tablist" id="tabs">
     <button class="tab" role="tab" data-tab="request" aria-selected="true">Request time off</button>
     <button class="tab" role="tab" data-tab="out">Who's out</button>
@@ -156,12 +185,13 @@ body{margin:0}
     <h2>Staff list</h2>
     <p class="hint" style="margin:0">Each person signs in with the email listed here. Classification and start date drive their vacation allowance. "Prior years" counts previous full-time pastoral experience (Class 1–2 only).</p>
     <div class="tablewrap"><table>
-      <thead><tr><th>Name</th><th>Email</th><th>Class</th><th>Start date</th><th>Prior yrs</th><th></th></tr></thead>
+      <thead><tr><th>Name</th><th>Email</th><th>Class</th><th>Start date</th><th>Prior yrs</th><th>Password</th><th></th></tr></thead>
       <tbody id="staffBody"></tbody>
     </table></div>
     <div class="row"><button class="btn" id="addStaff" type="button">Add staff member</button><span id="staffMsg" class="hint"></span></div>
   </section>
 
+  </div>
   <footer>Classes: 1 Lead Pastor · 2 Full-time Pastoral · 3 Part-time Pastoral · 4 Full-time Support · 5 Temporary/Part-time</footer>
 </div>
 
@@ -181,7 +211,7 @@ $('#balYear').textContent=YEAR;
 async function api(path,opts={}){
   const r=await fetch('/api/'+path,{...opts,headers:{'content-type':'application/json'},credentials:'same-origin'});
   let data=null;try{data=await r.json()}catch(e){}
-  if(!r.ok)throw new Error((data&&data.error)||'Something went wrong. Try again in a moment.');
+  if(!r.ok){const e=new Error((data&&data.error)||'Something went wrong. Try again in a moment.');e.status=r.status;throw e}
   return data;
 }
 
@@ -274,7 +304,9 @@ function renderStaff(){const b=$('#staffBody');if(document.activeElement&&b.cont
    <td><select id="c-${esc(s.id)}" data-f="cls" aria-label="Classification"><option value="">–</option>${[1,2,3,4,5].map(c=>`<option value="${c}" ${Number(s.cls)===c?'selected':''}>${c} · ${CLASS[c]}</option>`).join('')}</select></td>
    <td><input id="s-${esc(s.id)}" type="date" data-f="start" value="${esc(s.start||'')}" aria-label="Start date"></td>
    <td><input id="p-${esc(s.id)}" type="number" min="0" step="1" data-f="priorYears" value="${esc(s.priorYears||0)}" style="width:70px" aria-label="Prior years"></td>
-   <td><button class="btn" type="button" data-remove="${esc(s.id)}">${s.active?'Remove':'Restore'}</button></td></tr>`).join(''):'<tr><td colspan="6" class="empty">No staff yet. Use "Add staff member" below.</td></tr>'}
+   <td><div class="pwcell"><input id="pw-${esc(s.id)}" type="password" autocomplete="new-password" placeholder="${s.hasPassword?'New password':'Starting password'}" aria-label="Password for ${esc(s.name)}"><button class="btn" type="button" data-setpw="${esc(s.id)}">Set</button></div>
+     <span class="hint">${s.hasPassword?(s.mustChange?'Waiting for them to choose their own':'Set'):'Not set yet'}</span></td>
+   <td><button class="btn" type="button" data-remove="${esc(s.id)}">${s.active?'Remove':'Restore'}</button></td></tr>`).join(''):'<tr><td colspan="7" class="empty">No staff yet. Use "Add staff member" below.</td></tr>'}
 function renderAll(){renderWho();renderMine();renderOut();renderBalances();if(me.isAdmin){renderApprovals();renderStaff()}balHint()}
 
 document.addEventListener('click',async e=>{const b=e.target.closest('[data-act]');if(!b)return;const id=b.dataset.id,act=b.dataset.act;b.disabled=true;
@@ -283,25 +315,51 @@ document.addEventListener('click',async e=>{const b=e.target.closest('[data-act]
 $('#staffBody').addEventListener('change',async e=>{const tr=e.target.closest('tr');const f=e.target.dataset.f;if(!tr||!f)return;
   let v=e.target.value;if(f==='cls')v=v===''?null:Number(v);if(f==='priorYears')v=Number(v)||0;
   try{await api('staff/'+tr.dataset.id,{method:'PATCH',body:JSON.stringify({[f]:v})});$('#staffMsg').textContent='Saved.';e.target.blur();await load()}catch(err){$('#staffMsg').textContent=err.message}});
+$('#staffBody').addEventListener('click',async e=>{const p=e.target.closest('[data-setpw]');if(!p)return;const sid=p.dataset.setpw;const inp=document.getElementById('pw-'+sid);const s=staff.find(x=>x.id===sid);
+  if(!inp.value||inp.value.length<8){$('#staffMsg').textContent='Passwords need at least 8 characters.';inp.focus();return}
+  p.disabled=true;try{await api('staff/'+sid+'/password',{method:'POST',body:JSON.stringify({password:inp.value})});inp.value='';
+    $('#staffMsg').textContent=sid===me.staffId?'Your password is updated.':`Password set for ${s.name}. Give it to them privately; they'll choose their own the first time they sign in.`;await load()}
+  catch(err){$('#staffMsg').textContent=err.message}p.disabled=false});
 $('#staffBody').addEventListener('click',async e=>{const b=e.target.closest('[data-remove]');if(!b)return;const s=staff.find(x=>x.id===b.dataset.remove);
   try{await api('staff/'+s.id,{method:'PATCH',body:JSON.stringify({active:!s.active})});await load()}catch(err){$('#staffMsg').textContent=err.message}});
 $('#addStaff').addEventListener('click',async()=>{try{await api('staff',{method:'POST',body:JSON.stringify({name:'New staff member'})});$('#staffMsg').textContent='Added. Fill in the details above.';await load()}catch(err){$('#staffMsg').textContent=err.message}});
 
 async function load(){
-  try{[staff,reqs]=await Promise.all([api('staff'),api('requests')]);status('');renderAll()}
-  catch(err){status(err.message,'bad')}}
+  try{[staff,reqs]=await Promise.all([api('staff'),api('requests')]);if($('#status').classList.contains('bad')||$('#status').textContent==='Loading…')status('');renderAll()}
+  catch(err){if(err.status===401){showLogin();return}status(err.message,'bad')}}
 
 let saved='request';try{saved=localStorage.getItem('nw-tab')||'request'}catch(e){}
-(async()=>{
-  try{me=await api('me')}catch(err){status(err.message,'bad');$('#reqForm').hidden=true;return}
-  $('#signed').textContent='Signed in as '+me.email;
-  if(me.isAdmin){$('#tabApprovals').hidden=false;$('#tabStaff').hidden=false}
+let started=false, timer=null;
+function screen(which){$('#loginBox').hidden=which!=='login';$('#pwBox').hidden=which!=='pw';$('#app').hidden=which!=='app';$('#signed').hidden=which==='login'}
+function showLogin(){screen('login');if(timer){clearInterval(timer);timer=null}setTimeout(()=>$('#lgEmail').focus(),0)}
+function showPw(forced){screen('pw');$('#pwForm').reset();$('#pwMsg').hidden=true;$('#pwCancel').hidden=forced;
+  $('#pwTitle').textContent=forced?'Choose your own password':'Change your password';
+  $('#pwIntro').textContent=forced?'Welcome! Enter the starting password Pastor Randy gave you, then pick a new one only you know.':'';
+  $('#pwCur').previousSibling.textContent=forced?'Starting password ':'Current password ';setTimeout(()=>$('#pwCur').focus(),0)}
+async function start(){
+  try{me=await api('me')}catch(err){showLogin();return}
+  $('#signedName').textContent='Signed in as '+me.name;
+  if(me.mustChange){showPw(true);return}
+  $('#tabApprovals').hidden=!me.isAdmin;$('#tabStaff').hidden=!me.isAdmin;
+  screen('app');
   show((['approvals','staff'].includes(saved)&&!me.isAdmin)?'request':saved);
   await load();
-  setInterval(()=>{if(!document.hidden)load()},60000);
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden)load()});
-})();
+  if(!timer)timer=setInterval(()=>{if(!document.hidden&&!$('#app').hidden)load()},60000);
+  if(!started){started=true;document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!$('#app').hidden)load()})}
+}
+$('#loginForm').addEventListener('submit',async e=>{e.preventDefault();const m=$('#lgMsg');m.hidden=true;$('#lgBtn').disabled=true;
+  try{await api('auth/login',{method:'POST',body:JSON.stringify({email:$('#lgEmail').value,password:$('#lgPw').value})});$('#lgPw').value='';await start()}
+  catch(err){m.textContent=err.message;m.hidden=false}$('#lgBtn').disabled=false});
+$('#pwForm').addEventListener('submit',async e=>{e.preventDefault();const m=$('#pwMsg');
+  if($('#pwNew').value!==$('#pwNew2').value){m.className='msg bad';m.textContent='The two new passwords don\'t match.';m.hidden=false;return}
+  $('#pwBtn').disabled=true;
+  try{await api('password',{method:'POST',body:JSON.stringify({current:$('#pwCur').value,next:$('#pwNew').value})});$('#pwForm').reset();await start();status('Your password is saved.','ok');setTimeout(()=>status(''),4000)}
+  catch(err){m.className='msg bad';m.textContent=err.message;m.hidden=false}$('#pwBtn').disabled=false});
+$('#pwCancel').addEventListener('click',()=>screen('app'));
+$('#openPw').addEventListener('click',()=>showPw(false));
+$('#signOut').addEventListener('click',async()=>{try{await api('auth/logout',{method:'POST'})}catch(e){}me={isAdmin:false,staffId:null};staff=[];reqs=[];showLogin()});
 show('request');
+start();
 })();
 </script>
 </body>

@@ -19,12 +19,5 @@
   "vars": {
     // People who can approve requests and edit the staff list.
     "ADMIN_EMAILS": "randy@northwoodbaptist.com,tommy@northwoodbaptist.com"
-  },
-  "access": {
-    // Used only by `wrangler dev` on a local computer to pretend someone is signed in.
-    "dev": {
-      "aud": "local-dev",
-      "identity": { "email": "randy@northwoodbaptist.com" }
-    }
   }
 }
