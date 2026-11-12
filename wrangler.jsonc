@@ -1,0 +1,30 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "northwood-staff-time-off",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "preview_urls": false,
+  "assets": {
+    "directory": "./public",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "northwood-staff-time-off",
+      "database_id": "294e53eb-2992-4975-81da-8acbe9585b1a"
+    }
+  ],
+  "vars": {
+    // People who can approve requests and edit the staff list.
+    "ADMIN_EMAILS": "randy@northwoodbaptist.com,tommy@northwoodbaptist.com"
+  },
+  "access": {
+    // Used only by `wrangler dev` on a local computer to pretend someone is signed in.
+    "dev": {
+      "aud": "local-dev",
+      "identity": { "email": "randy@northwoodbaptist.com" }
+    }
+  }
+}

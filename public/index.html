@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Northwood Staff Time Off</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout: one centered column, tab bar on top, each tab a single working panel. */
+:root{
+  --bg:#f4f6f8; --surface:#ffffff; --ink:#1b2733; --muted:#5d6b78; --line:#dbe2e8;
+  --accent:#2f5d62; --accent-ink:#ffffff; --accent-soft:#e3eeee;
+  --ok:#2e7d4f; --ok-soft:#e2f2e8; --warn:#9a6a10; --warn-soft:#fbf0d9; --bad:#a63d3d; --bad-soft:#f7e3e3;
+  --display:"Manrope",system-ui,sans-serif; --body:"Inter",system-ui,-apple-system,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#12181e; --surface:#1a222a; --ink:#e4eaef; --muted:#97a5b1; --line:#2b3640;
+  --accent:#7fb6b0; --accent-ink:#0f1a1b; --accent-soft:#1f3233;
+  --ok:#7ccf9c; --ok-soft:#173326; --warn:#e3b65c; --warn-soft:#352a12; --bad:#e58a8a; --bad-soft:#3a1d1d; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12181e; --surface:#1a222a; --ink:#e4eaef; --muted:#97a5b1; --line:#2b3640;
+  --accent:#7fb6b0; --accent-ink:#0f1a1b; --accent-soft:#1f3233;
+  --ok:#7ccf9c; --ok-soft:#173326; --warn:#e3b65c; --warn-soft:#352a12; --bad:#e58a8a; --bad-soft:#3a1d1d; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
+.wrap{max-width:860px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+header h1{font:800 1.6rem/1.2 var(--display);margin:0;text-wrap:balance}
+header p{margin:4px 0 0;color:var(--muted)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:8px}
+.tab{font:600 .9rem var(--body);background:none;border:1px solid transparent;color:var(--muted);padding:7px 12px;border-radius:8px;cursor:pointer}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected="true"]{background:var(--accent-soft);color:var(--ink);border-color:var(--line)}
+.tab .count{display:inline-block;min-width:18px;padding:0 5px;margin-left:6px;border-radius:9px;background:var(--warn);color:var(--surface);font-size:.75rem;text-align:center}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:16px}
+h2{font:700 1.15rem var(--display);margin:0}
+h3{font:700 .8rem var(--body);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+label{display:flex;flex-direction:column;gap:5px;font-weight:600;font-size:.85rem;min-width:0}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 10px;width:100%;box-sizing:border-box}
+textarea{min-height:70px;resize:vertical}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.hint{font-weight:400;color:var(--muted);font-size:.8rem}
+.btn{font:600 .9rem var(--body);border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:9px 14px;border-radius:8px;cursor:pointer}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.ok{background:var(--ok-soft);color:var(--ok);border-color:transparent}
+.btn.bad{background:var(--bad-soft);color:var(--bad);border-color:transparent}
+.btn:disabled{opacity:.5;cursor:default}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.msg{padding:10px 12px;border-radius:8px;font-size:.9rem}
+.msg.ok{background:var(--ok-soft);color:var(--ok)} .msg.bad{background:var(--bad-soft);color:var(--bad)} .msg.info{background:var(--accent-soft)}
+.list{display:flex;flex-direction:column;gap:0}
+.item{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:12px 0;border-top:1px solid var(--line);align-items:center}
+.item:first-child{border-top:0}
+.item .who{font-weight:600}
+.item .meta{color:var(--muted);font-size:.85rem;grid-column:1}
+.item .acts{grid-row:1/span 2;grid-column:2;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.pill{display:inline-block;font:600 .72rem var(--body);text-transform:uppercase;letter-spacing:.05em;padding:2px 8px;border-radius:10px;margin-left:6px;vertical-align:1px}
+.pill.pending{background:var(--warn-soft);color:var(--warn)} .pill.approved{background:var(--ok-soft);color:var(--ok)} .pill.declined{background:var(--bad-soft);color:var(--bad)}
+.pill.type{background:var(--accent-soft);color:var(--ink)}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;min-width:560px}
+th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line);font-size:.9rem;vertical-align:top}
+th{font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+td.num{text-align:right} th.num{text-align:right}
+.bar{height:6px;background:var(--line);border-radius:3px;margin-top:4px;overflow:hidden}
+.bar span{display:block;height:100%;background:var(--accent)}
+.empty{color:var(--muted);text-align:center;padding:24px 8px}
+.month{display:flex;flex-direction:column;gap:2px}
+.outnow{background:var(--accent-soft);border-radius:10px;padding:12px 14px}
+footer{color:var(--muted);font-size:.8rem;text-align:center}
+.staffrow td input,.staffrow td select{padding:6px 8px;min-width:0}
+@media (max-width:520px){.item{grid-template-columns:1fr}.item .acts{grid-row:auto;grid-column:1;justify-content:flex-start}}
+</style>
+<style>
+html{color-scheme:light}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+[hidden]{display:none!important}
+.signed{color:var(--muted);font-size:.85rem}
+.who-static{padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);font-weight:500}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Staff Time Off</h1>
+    <p>Northwood Baptist Church · request time away and see who's out</p>
+    <p class="signed" id="signed"></p>
+  </header>
+
+  <nav class="tabs" role="tablist" id="tabs">
+    <button class="tab" role="tab" data-tab="request" aria-selected="true">Request time off</button>
+    <button class="tab" role="tab" data-tab="out">Who's out</button>
+    <button class="tab" role="tab" data-tab="balances">Balances</button>
+    <button class="tab" role="tab" data-tab="approvals" id="tabApprovals" hidden>Approvals<span class="count" id="pendCount" hidden>0</span></button>
+    <button class="tab" role="tab" data-tab="staff" id="tabStaff" hidden>Staff</button>
+  </nav>
+
+  <div id="status" class="msg info">Loading…</div>
+
+  <section class="panel" data-panel="request">
+    <h2>Request time off</h2>
+    <form id="reqForm" class="grid">
+      <label>Request for
+        <select id="rqStaff" hidden></select>
+        <div id="rqWho" class="who-static">…</div>
+      </label>
+      <label>Type
+        <select id="rqType">
+          <option value="vacation">Vacation</option>
+          <option value="medical">Medical / sick</option>
+          <option value="bereavement">Bereavement</option>
+          <option value="other">Other (ministry, jury duty…)</option>
+        </select>
+      </label>
+      <label>First day off <input type="date" id="rqStart" required></label>
+      <label>Last day off <input type="date" id="rqEnd" required></label>
+      <label>Workdays used <input type="number" id="rqDays" min="0.5" step="0.5" required>
+        <span class="hint">Counted Mon–Fri automatically. Adjust for half days or Sunday duties.</span></label>
+      <label style="grid-column:1/-1">Note (optional) <textarea id="rqNote" maxlength="500" placeholder="Coverage plans, who's handling Sunday, anything your supervisor should know"></textarea></label>
+      <div class="row" style="grid-column:1/-1">
+        <button class="btn primary" type="submit" id="rqSubmit">Submit request</button>
+        <span id="rqBal" class="hint"></span>
+      </div>
+    </form>
+    <div id="rqMsg" class="msg" hidden></div>
+    <div>
+      <h3 style="margin-bottom:6px">Requests</h3>
+      <div class="list" id="myList"></div>
+    </div>
+  </section>
+
+  <section class="panel" data-panel="out" hidden>
+    <h2>Who's out</h2>
+    <div id="outNow" class="outnow"></div>
+    <div id="outList" class="list"></div>
+  </section>
+
+  <section class="panel" data-panel="balances" hidden>
+    <h2>Balances for <span id="balYear"></span></h2>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Staff</th><th>Class</th><th class="num">Vacation allowed</th><th class="num">Used</th><th class="num">Pending</th><th class="num">Left</th><th>Medical</th></tr></thead>
+      <tbody id="balBody"></tbody>
+    </table></div>
+    <p class="hint">Vacation follows Handbook §08.A: weeks by classification and years of service, counted as 5 workdays per week. Unused days don't roll over past the caps. Medical for Class 3–4 is an estimate from months of service (1 day/month for Class 4, 1 day per 2 months for Class 3, max 30).</p>
+  </section>
+
+  <section class="panel" data-panel="approvals" hidden>
+    <h2>Waiting for approval</h2>
+    <div id="apprList" class="list"></div>
+    <h3>Recently decided</h3>
+    <div id="decidedList" class="list"></div>
+  </section>
+
+  <section class="panel" data-panel="staff" hidden>
+    <h2>Staff list</h2>
+    <p class="hint" style="margin:0">Each person signs in with the email listed here. Classification and start date drive their vacation allowance. "Prior years" counts previous full-time pastoral experience (Class 1–2 only).</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Name</th><th>Email</th><th>Class</th><th>Start date</th><th>Prior yrs</th><th></th></tr></thead>
+      <tbody id="staffBody"></tbody>
+    </table></div>
+    <div class="row"><button class="btn" id="addStaff" type="button">Add staff member</button><span id="staffMsg" class="hint"></span></div>
+  </section>
+
+  <footer>Classes: 1 Lead Pastor · 2 Full-time Pastoral · 3 Part-time Pastoral · 4 Full-time Support · 5 Temporary/Part-time</footer>
+</div>
+
+<script>
+(function(){
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const CLASS={1:'Lead Pastor',2:'FT Pastoral',3:'PT Pastoral',4:'FT Support',5:'Temp/PT'};
+const TYPE={vacation:'Vacation',medical:'Medical',bereavement:'Bereavement',other:'Other',away:'Away'};
+let me={isAdmin:false,staffId:null,email:''}, staff=[], reqs=[];
+const today=new Date(); today.setHours(0,0,0,0);
+const YEAR=today.getFullYear();
+const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const TODAY=iso(today);
+$('#balYear').textContent=YEAR;
+
+async function api(path,opts={}){
+  const r=await fetch('/api/'+path,{...opts,headers:{'content-type':'application/json'},credentials:'same-origin'});
+  let data=null;try{data=await r.json()}catch(e){}
+  if(!r.ok)throw new Error((data&&data.error)||'Something went wrong. Try again in a moment.');
+  return data;
+}
+
+function parseD(s){if(!s)return null;const [y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)}
+function fmt(s){const d=parseD(s);return d?d.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'}):''}
+function range(r){return r.start===r.end?fmt(r.start):fmt(r.start)+' – '+fmt(r.end)}
+function workdays(a,b){const s=parseD(a),e=parseD(b);if(!s||!e||e<s)return 0;let n=0;for(const d=new Date(s);d<=e;d.setDate(d.getDate()+1)){const w=d.getDay();if(w&&w<6)n++}return n}
+function yearsOf(p){const s=parseD(p.start);if(!s)return null;return (today-s)/31557600000+(Number(p.priorYears)||0)}
+function monthsOf(p){const s=parseD(p.start);if(!s)return null;return (today.getFullYear()-s.getFullYear())*12+today.getMonth()-s.getMonth()}
+function vacWeeks(p){const c=Number(p.cls),y=yearsOf(p);if(!c)return null;if(c===5)return 0;if(c===3)return 2;if(y===null)return null;
+  if(y<0.5)return 0;if(y<=5)return 2;if(y<=10)return 3;if(c===4)return 4;if(y<=15)return 4;return 5}
+function sumDays(id,type,status,yearOnly){return reqs.filter(r=>r.staffId===id&&r.type===type&&r.status===status&&(!yearOnly||String(r.start).slice(0,4)==String(YEAR))).reduce((a,r)=>a+(Number(r.days)||0),0)}
+function vacSummary(p){const w=vacWeeks(p);const allow=w===null?null:w*5;const used=sumDays(p.id,'vacation','approved',true),pend=sumDays(p.id,'vacation','pending',true);
+  return{allow,used,pend,left:allow===null?null:allow-used-pend}}
+function medSummary(p){const c=Number(p.cls);const used=sumDays(p.id,'medical','approved',true);
+  if(c===1||c===2)return{text:'As needed',used};if(c===5)return{text:'Not provided',used};
+  if(c===3||c===4){const m=monthsOf(p);if(m===null)return{text:'Needs start date',used};const acc=Math.min(30,Math.floor(m/(c===3?2:1)));
+    const all=reqs.filter(r=>r.staffId===p.id&&r.type==='medical'&&r.status==='approved').reduce((a,r)=>a+(Number(r.days)||0),0);
+    return{text:'≈'+Math.max(0,acc-all)+' of '+acc+' days left',used}}
+  return{text:'Set class',used}}
+const nameOf=id=>(staff.find(s=>s.id===id)||{}).name||'Unknown';
+const forId=()=>me.isAdmin?$('#rqStaff').value:me.staffId;
+
+function status(t,kind){const el=$('#status');if(!t){el.hidden=true;return}el.textContent=t;el.className='msg '+(kind||'info');el.hidden=false}
+
+function show(tab){$$('.tab').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===tab));$$('[data-panel]').forEach(p=>p.hidden=p.dataset.panel!==tab);try{localStorage.setItem('nw-tab',tab)}catch(e){}}
+$('#tabs').addEventListener('click',e=>{const b=e.target.closest('.tab');if(b)show(b.dataset.tab)});
+
+function setDays(){const n=workdays($('#rqStart').value,$('#rqEnd').value);if(n)$('#rqDays').value=n;balHint()}
+$('#rqStart').addEventListener('change',()=>{if(!$('#rqEnd').value||$('#rqEnd').value<$('#rqStart').value)$('#rqEnd').value=$('#rqStart').value;setDays()});
+$('#rqEnd').addEventListener('change',setDays);
+$('#rqType').addEventListener('change',balHint);
+$('#rqStaff').addEventListener('change',()=>{balHint();renderMine()});
+$('#rqDays').addEventListener('input',balHint);
+function balHint(){const p=staff.find(s=>s.id===forId());const el=$('#rqBal');if(!p||$('#rqType').value!=='vacation'){el.textContent='';return}
+  const v=vacSummary(p);if(v.left===null){el.textContent='Vacation allowance isn\'t set up yet. Pastor Randy can add a start date.';return}
+  const d=Number($('#rqDays').value)||0;const who=me.isAdmin&&p.id!==me.staffId?p.name+' has':'You have';
+  el.textContent=`${who} ${v.left} vacation day${v.left===1?'':'s'} left this year`+(d?` · ${v.left-d} after this request`:'')+'.';}
+
+$('#reqForm').addEventListener('submit',async e=>{e.preventDefault();const m=$('#rqMsg');
+  const r={staffId:forId(),type:$('#rqType').value,start:$('#rqStart').value,end:$('#rqEnd').value,days:Number($('#rqDays').value)||0,note:$('#rqNote').value.trim()};
+  if(!r.staffId){m.className='msg bad';m.textContent='Choose who this request is for.';m.hidden=false;return}
+  $('#rqSubmit').disabled=true;
+  try{await api('requests',{method:'POST',body:JSON.stringify(r)});
+    m.className='msg ok';m.textContent=`Request sent for ${range(r)}. It will show as approved here once it's reviewed.`;m.hidden=false;
+    $('#rqNote').value='';$('#rqStart').value='';$('#rqEnd').value='';$('#rqDays').value='';await load()}
+  catch(err){m.className='msg bad';m.textContent=err.message;m.hidden=false}
+  $('#rqSubmit').disabled=false});
+
+function reqItem(r,opts={}){const acts=[];
+  if(opts.decide)acts.push(`<button class="btn ok" data-act="approved" data-id="${esc(r.id)}">Approve</button><button class="btn bad" data-act="declined" data-id="${esc(r.id)}">Decline</button>`);
+  if(opts.cancel&&r.status==='pending')acts.push(`<button class="btn" data-act="cancel" data-id="${esc(r.id)}">Withdraw</button>`);
+  if(opts.undo&&me.isAdmin)acts.push(`<button class="btn" data-act="pending" data-id="${esc(r.id)}">Reopen</button>`);
+  const meta=r.days!=null?`${r.days} workday${r.days==1?'':'s'}${r.note?' · '+esc(r.note):''}`:'';
+  return `<div class="item"><div class="who">${opts.showName?esc(nameOf(r.staffId))+' · ':''}${esc(range(r))}<span class="pill type">${TYPE[r.type]||esc(r.type)}</span>${opts.noStatus?'':`<span class="pill ${esc(r.status)}">${esc(r.status)}</span>`}</div>
+  <div class="meta">${meta}${opts.warn||''}</div><div class="acts">${acts.join('')}</div></div>`}
+
+function renderWho(){
+  if(me.isAdmin){const sel=$('#rqStaff'),cur=sel.value||me.staffId||'';
+    sel.innerHTML=staff.filter(s=>s.active).map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
+    sel.value=cur;sel.hidden=false;$('#rqWho').hidden=true}
+  else{$('#rqWho').textContent=nameOf(me.staffId);$('#rqStaff').hidden=true;$('#rqWho').hidden=false}}
+function renderMine(){const id=forId(),el=$('#myList');
+  const mine=reqs.filter(r=>r.staffId===id).sort((a,b)=>b.start.localeCompare(a.start)).slice(0,12);
+  el.innerHTML=mine.length?mine.map(r=>reqItem(r,{cancel:true})).join(''):'<div class="empty">No requests yet. Fill in the form above to send your first one.</div>'}
+function renderOut(){const live=reqs.filter(r=>r.status!=='declined'&&r.end>=TODAY).sort((a,b)=>a.start.localeCompare(b.start));
+  const now=live.filter(r=>r.status==='approved'&&r.start<=TODAY);
+  $('#outNow').innerHTML='<h3>Out today</h3>'+(now.length?now.map(r=>`<div><strong>${esc(nameOf(r.staffId))}</strong> · back after ${esc(fmt(r.end))}</div>`).join(''):'<div>Everyone is in.</div>');
+  const later=live.filter(r=>!(r.status==='approved'&&r.start<=TODAY));
+  if(!later.length){$('#outList').innerHTML='<div class="empty">No upcoming time off on the calendar.</div>';return}
+  const groups={};later.forEach(r=>{const k=parseD(r.start).toLocaleDateString(undefined,{month:'long',year:'numeric'});(groups[k]=groups[k]||[]).push(r)});
+  $('#outList').innerHTML=Object.entries(groups).map(([k,rs])=>`<div class="month"><h3 style="margin-top:10px">${esc(k)}</h3>${rs.map(r=>reqItem(r,{showName:true})).join('')}</div>`).join('')}
+function renderBalances(){const body=$('#balBody');const rows=staff.filter(s=>s.active&&(me.isAdmin||s.id===me.staffId));
+  if(!rows.length){body.innerHTML='<tr><td colspan="7" class="empty">No balances to show yet.</td></tr>';return}
+  body.innerHTML=rows.map(p=>{const v=vacSummary(p),m=medSummary(p);const pct=v.allow?Math.min(100,(v.used/v.allow)*100):0;
+    return `<tr><td><strong>${esc(p.name)}</strong></td><td>${p.cls?esc(p.cls)+' · '+CLASS[p.cls]:'<span class="hint">Not set</span>'}</td>
+    <td class="num">${v.allow===null?'<span class="hint">Needs setup</span>':v.allow+' days'}</td><td class="num">${v.used}</td><td class="num">${v.pend||'–'}</td>
+    <td class="num"><strong>${v.left===null?'–':v.left}</strong>${v.allow?`<div class="bar"><span style="width:${pct}%"></span></div>`:''}</td><td>${esc(m.text)}${m.used?` <span class="hint">(${m.used} used)</span>`:''}</td></tr>`}).join('')}
+function renderApprovals(){const pend=reqs.filter(r=>r.status==='pending').sort((a,b)=>a.start.localeCompare(b.start));
+  $('#pendCount').textContent=pend.length;$('#pendCount').hidden=!pend.length;
+  $('#apprList').innerHTML=pend.length?pend.map(r=>{const p=staff.find(s=>s.id===r.staffId);let warn='';
+    if(p&&r.type==='vacation'){const v=vacSummary(p);if(v.left!==null&&v.left<0)warn=`<div style="color:var(--bad)">This would put ${esc(p.name)} ${-v.left} day${v.left===-1?'':'s'} over their vacation allowance.</div>`}
+    return reqItem(r,{showName:true,decide:true,noStatus:true,warn})}).join(''):'<div class="empty">Nothing waiting. You\'re all caught up.</div>';
+  const done=reqs.filter(r=>r.status!=='pending'&&r.decidedAt).sort((a,b)=>b.decidedAt.localeCompare(a.decidedAt)).slice(0,8);
+  $('#decidedList').innerHTML=done.length?done.map(r=>reqItem(r,{showName:true,undo:true})).join(''):'<div class="empty">No decisions yet.</div>'}
+function renderStaff(){const b=$('#staffBody');if(document.activeElement&&b.contains(document.activeElement))return;
+  b.innerHTML=staff.length?staff.map(s=>`<tr class="staffrow" data-id="${esc(s.id)}">
+   <td><input id="n-${esc(s.id)}" data-f="name" value="${esc(s.name)}" aria-label="Name"></td>
+   <td><input id="e-${esc(s.id)}" type="email" data-f="email" value="${esc(s.email||'')}" aria-label="Email"></td>
+   <td><select id="c-${esc(s.id)}" data-f="cls" aria-label="Classification"><option value="">–</option>${[1,2,3,4,5].map(c=>`<option value="${c}" ${Number(s.cls)===c?'selected':''}>${c} · ${CLASS[c]}</option>`).join('')}</select></td>
+   <td><input id="s-${esc(s.id)}" type="date" data-f="start" value="${esc(s.start||'')}" aria-label="Start date"></td>
+   <td><input id="p-${esc(s.id)}" type="number" min="0" step="1" data-f="priorYears" value="${esc(s.priorYears||0)}" style="width:70px" aria-label="Prior years"></td>
+   <td><button class="btn" type="button" data-remove="${esc(s.id)}">${s.active?'Remove':'Restore'}</button></td></tr>`).join(''):'<tr><td colspan="6" class="empty">No staff yet. Use "Add staff member" below.</td></tr>'}
+function renderAll(){renderWho();renderMine();renderOut();renderBalances();if(me.isAdmin){renderApprovals();renderStaff()}balHint()}
+
+document.addEventListener('click',async e=>{const b=e.target.closest('[data-act]');if(!b)return;const id=b.dataset.id,act=b.dataset.act;b.disabled=true;
+  try{if(act==='cancel')await api('requests/'+id,{method:'DELETE'});else await api('requests/'+id,{method:'PATCH',body:JSON.stringify({status:act})});await load()}
+  catch(err){status(err.message,'bad');b.disabled=false}});
+$('#staffBody').addEventListener('change',async e=>{const tr=e.target.closest('tr');const f=e.target.dataset.f;if(!tr||!f)return;
+  let v=e.target.value;if(f==='cls')v=v===''?null:Number(v);if(f==='priorYears')v=Number(v)||0;
+  try{await api('staff/'+tr.dataset.id,{method:'PATCH',body:JSON.stringify({[f]:v})});$('#staffMsg').textContent='Saved.';e.target.blur();await load()}catch(err){$('#staffMsg').textContent=err.message}});
+$('#staffBody').addEventListener('click',async e=>{const b=e.target.closest('[data-remove]');if(!b)return;const s=staff.find(x=>x.id===b.dataset.remove);
+  try{await api('staff/'+s.id,{method:'PATCH',body:JSON.stringify({active:!s.active})});await load()}catch(err){$('#staffMsg').textContent=err.message}});
+$('#addStaff').addEventListener('click',async()=>{try{await api('staff',{method:'POST',body:JSON.stringify({name:'New staff member'})});$('#staffMsg').textContent='Added. Fill in the details above.';await load()}catch(err){$('#staffMsg').textContent=err.message}});
+
+async function load(){
+  try{[staff,reqs]=await Promise.all([api('staff'),api('requests')]);status('');renderAll()}
+  catch(err){status(err.message,'bad')}}
+
+let saved='request';try{saved=localStorage.getItem('nw-tab')||'request'}catch(e){}
+(async()=>{
+  try{me=await api('me')}catch(err){status(err.message,'bad');$('#reqForm').hidden=true;return}
+  $('#signed').textContent='Signed in as '+me.email;
+  if(me.isAdmin){$('#tabApprovals').hidden=false;$('#tabStaff').hidden=false}
+  show((['approvals','staff'].includes(saved)&&!me.isAdmin)?'request':saved);
+  await load();
+  setInterval(()=>{if(!document.hidden)load()},60000);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)load()});
+})();
+show('request');
+})();
+</script>
+</body>
+</html>
