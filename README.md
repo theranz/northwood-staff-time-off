@@ -24,3 +24,10 @@ A simple page where Northwood Baptist Church staff request vacation, medical and
 Cloudflare builds and deploys automatically from the `main` branch of this repository.
 
 To add or remove approvers, edit `ADMIN_EMAILS` in `wrangler.jsonc` and commit.
+
+## How days are counted
+
+Days are counted automatically from each person's work week. Staff can't change the count; pastors can adjust it (for a half day, say).
+
+- **Class 1–2 (pastoral):** Sunday–Thursday. A vacation week is 5 days. Fridays and Saturdays never count.
+- **Class 3–4 (part-time pastoral, support):** Monday–Thursday. A vacation week is 4 days. Fridays, Saturdays and Sundays never count.

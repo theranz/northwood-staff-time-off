@@ -144,8 +144,8 @@ body{margin:0}
       </label>
       <label>First day off <input type="date" id="rqStart" required></label>
       <label>Last day off <input type="date" id="rqEnd" required></label>
-      <label>Workdays used <input type="number" id="rqDays" min="0.5" step="0.5" required>
-        <span class="hint">Counted Mon–Fri automatically. Adjust for half days or Sunday duties.</span></label>
+      <label>Days counted <input type="number" id="rqDays" min="0" step="0.5" readonly>
+        <span class="hint" id="rqDaysHint">Counted automatically from your work week.</span></label>
       <label style="grid-column:1/-1">Note (optional) <textarea id="rqNote" maxlength="500" placeholder="Coverage plans, who's handling Sunday, anything your supervisor should know"></textarea></label>
       <div class="row" style="grid-column:1/-1">
         <button class="btn primary" type="submit" id="rqSubmit">Submit request</button>
@@ -171,7 +171,7 @@ body{margin:0}
       <thead><tr><th>Staff</th><th>Class</th><th class="num">Vacation allowed</th><th class="num">Used</th><th class="num">Pending</th><th class="num">Left</th><th>Medical</th></tr></thead>
       <tbody id="balBody"></tbody>
     </table></div>
-    <p class="hint">Vacation follows Handbook §08.A: weeks by classification and years of service, counted as 5 workdays per week. Unused days don't roll over past the caps. Medical for Class 3–4 is an estimate from months of service (1 day/month for Class 4, 1 day per 2 months for Class 3, max 30).</p>
+    <p class="hint">Vacation follows Handbook §08.A: weeks by classification and years of service, counted by work week: Class 1–2 work Sunday–Thursday (5 days a week; Fridays and Saturdays never count), Class 3–4 work Monday–Thursday (4 days a week; Fridays, Saturdays and Sundays never count). Unused days don't roll over past the caps. Medical for Class 3–4 is an estimate from months of service (1 day/month for Class 4, 1 day per 2 months for Class 3, max 30).</p>
   </section>
 
   <section class="panel" data-panel="approvals" hidden>
@@ -218,13 +218,15 @@ async function api(path,opts={}){
 function parseD(s){if(!s)return null;const [y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)}
 function fmt(s){const d=parseD(s);return d?d.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'}):''}
 function range(r){return r.start===r.end?fmt(r.start):fmt(r.start)+' – '+fmt(r.end)}
-function workdays(a,b){const s=parseD(a),e=parseD(b);if(!s||!e||e<s)return 0;let n=0;for(const d=new Date(s);d<=e;d.setDate(d.getDate()+1)){const w=d.getDay();if(w&&w<6)n++}return n}
+const isPastoral=p=>p&&(Number(p.cls)===1||Number(p.cls)===2);
+const workWeek=p=>isPastoral(p)?[0,1,2,3,4]:[1,2,3,4];
+function workdays(a,b,p){const s=parseD(a),e=parseD(b);if(!s||!e||e<s)return 0;const wk=workWeek(p);let n=0;for(const d=new Date(s);d<=e;d.setDate(d.getDate()+1)){if(wk.includes(d.getDay()))n++}return n}
 function yearsOf(p){const s=parseD(p.start);if(!s)return null;return (today-s)/31557600000+(Number(p.priorYears)||0)}
 function monthsOf(p){const s=parseD(p.start);if(!s)return null;return (today.getFullYear()-s.getFullYear())*12+today.getMonth()-s.getMonth()}
 function vacWeeks(p){const c=Number(p.cls),y=yearsOf(p);if(!c)return null;if(c===5)return 0;if(c===3)return 2;if(y===null)return null;
   if(y<0.5)return 0;if(y<=5)return 2;if(y<=10)return 3;if(c===4)return 4;if(y<=15)return 4;return 5}
 function sumDays(id,type,status,yearOnly){return reqs.filter(r=>r.staffId===id&&r.type===type&&r.status===status&&(!yearOnly||String(r.start).slice(0,4)==String(YEAR))).reduce((a,r)=>a+(Number(r.days)||0),0)}
-function vacSummary(p){const w=vacWeeks(p);const allow=w===null?null:w*5;const used=sumDays(p.id,'vacation','approved',true),pend=sumDays(p.id,'vacation','pending',true);
+function vacSummary(p){const w=vacWeeks(p);const allow=w===null?null:w*(isPastoral(p)?5:4);const used=sumDays(p.id,'vacation','approved',true),pend=sumDays(p.id,'vacation','pending',true);
   return{allow,used,pend,left:allow===null?null:allow-used-pend}}
 function medSummary(p){const c=Number(p.cls);const used=sumDays(p.id,'medical','approved',true);
   if(c===1||c===2)return{text:'As needed',used};if(c===5)return{text:'Not provided',used};
@@ -240,11 +242,14 @@ function status(t,kind){const el=$('#status');if(!t){el.hidden=true;return}el.te
 function show(tab){$$('.tab').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===tab));$$('[data-panel]').forEach(p=>p.hidden=p.dataset.panel!==tab);try{localStorage.setItem('nw-tab',tab)}catch(e){}}
 $('#tabs').addEventListener('click',e=>{const b=e.target.closest('.tab');if(b)show(b.dataset.tab)});
 
-function setDays(){const n=workdays($('#rqStart').value,$('#rqEnd').value);if(n)$('#rqDays').value=n;balHint()}
+function setDays(recount=true){const p=staff.find(s=>s.id===forId());const a=$('#rqStart').value,b=$('#rqEnd').value;
+  $('#rqDays').readOnly=!me.isAdmin;
+  $('#rqDaysHint').textContent=(isPastoral(p)?'Sunday–Thursday count. Fridays and Saturdays don\'t.':'Monday–Thursday count. Fridays, Saturdays and Sundays don\'t.')+(me.isAdmin?' Pastors can adjust for a half day.':'');
+  if(recount&&a&&b&&b>=a)$('#rqDays').value=workdays(a,b,p);balHint()}
 $('#rqStart').addEventListener('change',()=>{if(!$('#rqEnd').value||$('#rqEnd').value<$('#rqStart').value)$('#rqEnd').value=$('#rqStart').value;setDays()});
 $('#rqEnd').addEventListener('change',setDays);
 $('#rqType').addEventListener('change',balHint);
-$('#rqStaff').addEventListener('change',()=>{balHint();renderMine()});
+$('#rqStaff').addEventListener('change',()=>{setDays();renderMine()});
 $('#rqDays').addEventListener('input',balHint);
 function balHint(){const p=staff.find(s=>s.id===forId());const el=$('#rqBal');if(!p||$('#rqType').value!=='vacation'){el.textContent='';return}
   const v=vacSummary(p);if(v.left===null){el.textContent='Vacation allowance isn\'t set up yet. Pastor Randy can add a start date.';return}
@@ -252,7 +257,7 @@ function balHint(){const p=staff.find(s=>s.id===forId());const el=$('#rqBal');if
   el.textContent=`${who} ${v.left} vacation day${v.left===1?'':'s'} left this year`+(d?` · ${v.left-d} after this request`:'')+'.';}
 
 $('#reqForm').addEventListener('submit',async e=>{e.preventDefault();const m=$('#rqMsg');
-  const r={staffId:forId(),type:$('#rqType').value,start:$('#rqStart').value,end:$('#rqEnd').value,days:Number($('#rqDays').value)||0,note:$('#rqNote').value.trim()};
+  const r={staffId:forId(),type:$('#rqType').value,start:$('#rqStart').value,end:$('#rqEnd').value,days:me.isAdmin?$('#rqDays').value:undefined,note:$('#rqNote').value.trim()};
   if(!r.staffId){m.className='msg bad';m.textContent='Choose who this request is for.';m.hidden=false;return}
   $('#rqSubmit').disabled=true;
   try{await api('requests',{method:'POST',body:JSON.stringify(r)});
@@ -307,7 +312,7 @@ function renderStaff(){const b=$('#staffBody');if(document.activeElement&&b.cont
    <td><div class="pwcell"><input id="pw-${esc(s.id)}" type="password" autocomplete="new-password" placeholder="${s.hasPassword?'New password':'Starting password'}" aria-label="Password for ${esc(s.name)}"><button class="btn" type="button" data-setpw="${esc(s.id)}">Set</button></div>
      <span class="hint">${s.hasPassword?(s.mustChange?'Waiting for them to choose their own':'Set'):'Not set yet'}</span></td>
    <td><button class="btn" type="button" data-remove="${esc(s.id)}">${s.active?'Remove':'Restore'}</button></td></tr>`).join(''):'<tr><td colspan="7" class="empty">No staff yet. Use "Add staff member" below.</td></tr>'}
-function renderAll(){renderWho();renderMine();renderOut();renderBalances();if(me.isAdmin){renderApprovals();renderStaff()}balHint()}
+function renderAll(){renderWho();renderMine();renderOut();renderBalances();if(me.isAdmin){renderApprovals();renderStaff()}setDays(false)}
 
 document.addEventListener('click',async e=>{const b=e.target.closest('[data-act]');if(!b)return;const id=b.dataset.id,act=b.dataset.act;b.disabled=true;
   try{if(act==='cancel')await api('requests/'+id,{method:'DELETE'});else await api('requests/'+id,{method:'PATCH',body:JSON.stringify({status:act})});await load()}

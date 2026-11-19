@@ -11,6 +11,21 @@ const MAX_FAILS = 5;
 const LOCK_MINUTES = 15;
 const COOKIE = "nw_session";
 
+// Which days count against time off, by staff classification (0 = Sunday ... 6 = Saturday).
+// Class 1–2 (pastoral): Sunday–Thursday. Fridays and Saturdays never count.
+// Class 3–5 (part-time pastoral, support, temporary): Monday–Thursday. Fri, Sat and Sun never count.
+const WORKDAYS = { pastoral: [0, 1, 2, 3, 4], other: [1, 2, 3, 4] };
+const workdaysFor = (cls) => (Number(cls) === 1 || Number(cls) === 2 ? WORKDAYS.pastoral : WORKDAYS.other);
+function countDays(start, end, cls) {
+  const days = workdaysFor(cls);
+  const [y1, m1, d1] = start.split("-").map(Number);
+  const [y2, m2, d2] = end.split("-").map(Number);
+  const cur = new Date(Date.UTC(y1, m1 - 1, d1)), last = new Date(Date.UTC(y2, m2 - 1, d2));
+  let n = 0;
+  for (; cur <= last; cur.setUTCDate(cur.getUTCDate() + 1)) if (days.includes(cur.getUTCDay())) n++;
+  return n;
+}
+
 const json = (data, status = 200, extraHeaders = {}) =>
   new Response(JSON.stringify(data), {
     status,
@@ -234,8 +249,17 @@ export default {
           if (!TYPES.includes(b.type)) return fail("Choose a type of time off.");
           if (!DATE.test(b.start || "") || !DATE.test(b.end || "")) return fail("Enter a first and last day.");
           if (b.end < b.start) return fail("The last day off comes before the first day.");
-          const days = Number(b.days);
-          if (!(days > 0 && days <= 60)) return fail("Enter how many workdays this uses.");
+          if (b.end.slice(0, 4) - b.start.slice(0, 4) > 1) return fail("That date range is too long.");
+          const who = await env.DB.prepare("SELECT cls FROM staff WHERE id = ? AND active = 1").bind(staffId).first();
+          if (!who) return fail("That staff member isn't on the list.");
+          // Days are always counted from the staff member's work week. Pastors may enter a different
+          // number (for a half day, say); everyone else gets the counted number.
+          let days = countDays(b.start, b.end, who.cls);
+          if (me.isAdmin && b.days !== undefined && b.days !== null && b.days !== "") {
+            const d = Number(b.days);
+            if (!(d >= 0 && d <= 60)) return fail("Days used must be between 0 and 60.");
+            days = d;
+          }
           const rid = newId();
           await env.DB.prepare("INSERT INTO requests (id,staff_id,type,start,end,days,note,status,created_at) VALUES (?,?,?,?,?,?,?,'pending',?)")
             .bind(rid, staffId, b.type, b.start, b.end, days, String(b.note || "").slice(0, 500), new Date().toISOString())
