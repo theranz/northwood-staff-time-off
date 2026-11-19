@@ -3,7 +3,8 @@
 // Passwords are stored only as salted PBKDF2 hashes; sessions are random tokens in an HttpOnly cookie.
 // The page itself (public/index.html) is served as a static asset.
 
-const TYPES = ["vacation", "medical", "bereavement", "other"];
+const TYPES = ["vacation", "medical", "bereavement", "floating", "other"];
+const HOLIDAY_CLASSES = [1, 2, 4]; // Handbook §08.B: paid holidays for Class 1, 2 and 4 only
 const STATUSES = ["pending", "approved", "declined"];
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const SESSION_DAYS = 30;
@@ -16,14 +17,73 @@ const COOKIE = "nw_session";
 // Class 4–5 (support, temporary): Monday–Thursday. Fridays, Saturdays and Sundays never count.
 const WORKDAYS = { pastoral: [0, 1, 2, 3, 4], other: [1, 2, 3, 4] };
 const workdaysFor = (cls) => ([1, 2, 3].includes(Number(cls)) ? WORKDAYS.pastoral : WORKDAYS.other);
-function countDays(start, end, cls) {
+// freeDays: Map of "YYYY-MM-DD" -> kind ("holiday" | "closed"). Office closures never count for anyone;
+// paid holidays don't count for the classes that receive them.
+function countDays(start, end, cls, freeDays = new Map()) {
   const days = workdaysFor(cls);
+  const getsHolidays = HOLIDAY_CLASSES.includes(Number(cls));
   const [y1, m1, d1] = start.split("-").map(Number);
   const [y2, m2, d2] = end.split("-").map(Number);
   const cur = new Date(Date.UTC(y1, m1 - 1, d1)), last = new Date(Date.UTC(y2, m2 - 1, d2));
   let n = 0;
-  for (; cur <= last; cur.setUTCDate(cur.getUTCDate() + 1)) if (days.includes(cur.getUTCDay())) n++;
+  for (; cur <= last; cur.setUTCDate(cur.getUTCDate() + 1)) {
+    if (!days.includes(cur.getUTCDay())) continue;
+    const kind = freeDays.get(cur.toISOString().slice(0, 10));
+    if (kind === "closed" || (kind === "holiday" && getsHolidays)) continue;
+    n++;
+  }
   return n;
+}
+
+// ---------- paid holidays + office closures ----------
+const ymd = (y, m, d) => new Date(Date.UTC(y, m, d)).toISOString().slice(0, 10);
+function nthWeekday(y, m, wd, n) { const d = new Date(Date.UTC(y, m, 1)); d.setUTCDate(1 + ((wd - d.getUTCDay() + 7) % 7) + 7 * (n - 1)); return d.toISOString().slice(0, 10); }
+function lastWeekday(y, m, wd) { const d = new Date(Date.UTC(y, m + 1, 0)); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() - wd + 7) % 7)); return d.toISOString().slice(0, 10); }
+function easterSunday(y) {
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+  return new Date(Date.UTC(y, Math.floor((h + l - 7 * m + 114) / 31) - 1, ((h + l - 7 * m + 114) % 31) + 1));
+}
+// Starting holiday dates for a year (Handbook §08.B). Pastors can change or remove any of them on the Holidays tab.
+function defaultHolidays(y) {
+  const easterMon = easterSunday(y); easterMon.setUTCDate(easterMon.getUTCDate() + 1);
+  const tg = nthWeekday(y, 10, 4, 4); const tgFri = new Date(tg + "T00:00:00Z"); tgFri.setUTCDate(tgFri.getUTCDate() + 1);
+  return [
+    [ymd(y, 0, 1), "New Year's Day"],
+    [easterMon.toISOString().slice(0, 10), "Easter (Monday after Easter)"],
+    [lastWeekday(y, 4, 1), "Memorial Day"],
+    [ymd(y, 6, 4), "Independence Day"],
+    [nthWeekday(y, 8, 1, 1), "Labor Day"],
+    [tg, "Thanksgiving Day"],
+    [tgFri.toISOString().slice(0, 10), "Day after Thanksgiving"],
+    [ymd(y, 11, 24), "Christmas Eve"],
+    [ymd(y, 11, 25), "Christmas Day"],
+  ];
+}
+async function ensureHolidays(env, years) {
+  for (const y of years) {
+    const done = await env.DB.prepare("SELECT year FROM holiday_years WHERE year = ?").bind(y).first();
+    if (done) continue;
+    await env.DB.batch([
+      ...defaultHolidays(y).map(([date, name]) => env.DB.prepare("INSERT OR IGNORE INTO free_days (date, name, kind, added_by) VALUES (?,?,'holiday','default')").bind(date, name)),
+      env.DB.prepare("INSERT OR IGNORE INTO holiday_years (year) VALUES (?)").bind(y),
+    ]);
+  }
+}
+async function freeDayMap(env, start, end) {
+  const { results } = await env.DB.prepare("SELECT date, kind FROM free_days WHERE date BETWEEN ? AND ?").bind(start, end).all();
+  return new Map(results.map((r) => [r.date, r.kind]));
+}
+// Recount vacation/medical days on requests that overlap a changed range, so balances stay right
+// when a pastor adds or removes a holiday or closure after requests were made.
+async function recountRequests(env, start, end) {
+  const { results } = await env.DB.prepare(
+    "SELECT r.id, r.start, r.end, r.type, s.cls FROM requests r JOIN staff s ON s.id = r.staff_id WHERE r.end >= ? AND r.start <= ? AND r.type != 'floating'"
+  ).bind(start, end).all();
+  if (!results.length) return;
+  const lo = results.reduce((a, r) => (r.start < a ? r.start : a), start), hi = results.reduce((a, r) => (r.end > a ? r.end : a), end);
+  const free = await freeDayMap(env, lo, hi);
+  await env.DB.batch(results.map((r) => env.DB.prepare("UPDATE requests SET days = ? WHERE id = ?").bind(countDays(r.start, r.end, r.cls, free), r.id)));
 }
 
 const json = (data, status = 200, extraHeaders = {}) =>
@@ -252,8 +312,21 @@ export default {
           if (b.end.slice(0, 4) - b.start.slice(0, 4) > 1) return fail("That date range is too long.");
           const who = await env.DB.prepare("SELECT cls FROM staff WHERE id = ? AND active = 1").bind(staffId).first();
           if (!who) return fail("That staff member isn't on the list.");
-          // Days are always counted from the staff member's work week, in whole days. Nobody can change the count.
-          const days = countDays(b.start, b.end, who.cls);
+          let days;
+          if (b.type === "floating") {
+            // One floating holiday per calendar year, for the classes that receive paid holidays.
+            if (!HOLIDAY_CLASSES.includes(Number(who.cls))) return fail("Floating holidays are for Class 1, 2 and 4 staff.");
+            if (b.start !== b.end) return fail("A floating holiday is a single day. Choose the same first and last day.");
+            const used = await env.DB.prepare("SELECT id FROM requests WHERE staff_id = ? AND type = 'floating' AND status != 'declined' AND substr(start,1,4) = ?")
+              .bind(staffId, b.start.slice(0, 4)).first();
+            if (used) return fail("The floating holiday for that year has already been requested.");
+            days = 0;
+          } else {
+            // Days are always counted from the staff member's work week, in whole days, skipping
+            // paid holidays and office closures. Nobody can change the count.
+            await ensureHolidays(env, [...new Set([+b.start.slice(0, 4), +b.end.slice(0, 4)])]);
+            days = countDays(b.start, b.end, who.cls, await freeDayMap(env, b.start, b.end));
+          }
           const rid = newId();
           await env.DB.prepare("INSERT INTO requests (id,staff_id,type,start,end,days,note,status,created_at) VALUES (?,?,?,?,?,?,?,'pending',?)")
             .bind(rid, staffId, b.type, b.start, b.end, days, String(b.note || "").slice(0, 500), new Date().toISOString())
@@ -278,6 +351,40 @@ export default {
               .bind(b.status, decided, decided ? me.email : null, id).run();
             return json({ ok: true });
           }
+        }
+      }
+
+      // ---- paid holidays + office closures
+      if (resource === "freedays") {
+        if (method === "GET") {
+          const y = Number(url.searchParams.get("year")) || new Date().getUTCFullYear();
+          if (y < 2020 || y > 2100) return fail("Choose a year between 2020 and 2100.");
+          await ensureHolidays(env, [y - 1, y, y + 1]);
+          const { results } = await env.DB.prepare("SELECT date, name, kind FROM free_days WHERE date BETWEEN ? AND ? ORDER BY date")
+            .bind(`${y - 1}-01-01`, `${y + 1}-12-31`).all();
+          return json(results);
+        }
+        if (!me.isAdmin) return fail("Only pastors can change holidays and closures.", 403);
+        if (method === "POST") {
+          const b = (await readBody(request)) || {};
+          const end = b.end || b.start;
+          if (!DATE.test(b.start || "") || !DATE.test(end)) return fail("Enter the date (or first and last date).");
+          if (end < b.start) return fail("The last day comes before the first day.");
+          if (!["holiday", "closed"].includes(b.kind)) return fail("Choose paid holiday or office closed.");
+          const name = String(b.name || "").trim().slice(0, 80);
+          if (!name) return fail("Give it a name, like \"Office closed for VBS\".");
+          const dates = [];
+          for (const d = new Date(b.start + "T00:00:00Z"); d <= new Date(end + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + 1)) dates.push(d.toISOString().slice(0, 10));
+          if (dates.length > 31) return fail("Add at most 31 days at a time.");
+          await ensureHolidays(env, [...new Set(dates.map((d) => +d.slice(0, 4)))]);
+          await env.DB.batch(dates.map((d) => env.DB.prepare("INSERT INTO free_days (date, name, kind, added_by) VALUES (?,?,?,?) ON CONFLICT(date) DO UPDATE SET name = excluded.name, kind = excluded.kind, added_by = excluded.added_by").bind(d, name, b.kind, me.email)));
+          await recountRequests(env, b.start, end);
+          return json({ ok: true, added: dates.length }, 201);
+        }
+        if (method === "DELETE" && id && DATE.test(id)) {
+          await env.DB.prepare("DELETE FROM free_days WHERE date = ?").bind(id).run();
+          await recountRequests(env, id, id);
+          return json({ ok: true });
         }
       }
 

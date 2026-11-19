@@ -32,6 +32,12 @@ Days are counted automatically from each person's work week, in whole days. Nobo
 - **Class 1–3 (pastoral, full- and part-time):** Sunday–Thursday. A vacation week is 5 days. Fridays and Saturdays never count.
 - **Class 4 (full-time support):** Monday–Thursday. A vacation week is 4 days. Fridays, Saturdays and Sundays never count.
 
-## Holidays
+## Holidays and office closures
 
-The Holidays tab lists the ten paid holidays from Handbook §08.B (Class 1, 2 and 4), with this year's dates worked out automatically.
+The Holidays tab lists the days that don't count against time off:
+
+- **Paid holidays** (Handbook §08.B) don't count for Class 1, 2 and 4. Each year's holidays are filled in automatically the first time that year is viewed: New Year's Day, the Monday after Easter, Memorial Day, Independence Day, Labor Day, Thanksgiving and the day after, Christmas Eve and Christmas Day. Pastors can remove or change any of them.
+- **Office closed** days, added by pastors, don't count for anyone.
+- **Floating holiday:** one per calendar year for Class 1, 2 and 4, requested with the "Floating holiday" type. It never counts against vacation.
+
+When a pastor adds or removes a holiday or closure, any requests on those days are recounted automatically.

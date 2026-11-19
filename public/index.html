@@ -140,6 +140,7 @@ body{margin:0}
           <option value="vacation">Vacation</option>
           <option value="medical">Medical / sick</option>
           <option value="bereavement">Bereavement</option>
+          <option value="floating">Floating holiday (1 per year)</option>
           <option value="other">Other (ministry, jury duty…)</option>
         </select>
       </label>
@@ -167,20 +168,32 @@ body{margin:0}
   </section>
 
   <section class="panel" data-panel="holidays" hidden>
-    <h2>Paid holidays <span id="holYear"></span></h2>
-    <p class="hint" style="margin:0">Ten paid holidays for Class 1, 2 and 4 staff (Handbook §08.B). Class 3 and Class 5 staff don't receive paid holidays.</p>
+    <div class="row" style="justify-content:space-between">
+      <h2>Days that don't count · <span id="holYear"></span></h2>
+      <div class="row"><button class="btn" type="button" id="holPrev" aria-label="Previous year">‹</button><button class="btn" type="button" id="holNext" aria-label="Next year">›</button></div>
+    </div>
+    <p class="hint" style="margin:0"><strong>Paid holidays</strong> (Handbook §08.B) don't count against time off for Class 1, 2 and 4 staff; Class 3 and 5 staff don't receive paid holidays. <strong>Office closed</strong> days don't count for anyone. Each eligible person also gets one <strong>floating holiday</strong> a year: request it with the "Floating holiday" type.</p>
     <div class="tablewrap"><table>
-      <thead><tr><th>Holiday</th><th class="num">Days</th><th>This year</th></tr></thead>
+      <thead><tr><th>Date</th><th>Name</th><th>Type</th><th id="holActHead" hidden></th></tr></thead>
       <tbody id="holBody"></tbody>
-      <tfoot><tr><th>Total</th><th class="num">10</th><th></th></tr></tfoot>
     </table></div>
     <p class="hint" style="margin:0">If a holiday falls on a weekend or your regular day off, you may take it on another day after checking with the lead pastor.</p>
+    <form id="holForm" class="grid" hidden>
+      <h3 style="grid-column:1/-1">Add a day off for everyone</h3>
+      <label>First day <input type="date" id="hlStart" required></label>
+      <label>Last day <input type="date" id="hlEnd"><span class="hint">Leave blank for one day.</span></label>
+      <label>Name <input type="text" id="hlName" maxlength="80" required placeholder="Office closed for staff retreat"></label>
+      <label>Type
+        <select id="hlKind"><option value="closed">Office closed (doesn't count for anyone)</option><option value="holiday">Paid holiday (Class 1, 2, 4)</option></select>
+      </label>
+      <div class="row" style="grid-column:1/-1"><button class="btn primary" type="submit" id="hlBtn">Add</button><span id="hlMsg" class="hint"></span></div>
+    </form>
   </section>
 
   <section class="panel" data-panel="balances" hidden>
     <h2>Balances for <span id="balYear"></span></h2>
     <div class="tablewrap"><table>
-      <thead><tr><th>Staff</th><th>Class</th><th class="num">Vacation allowed</th><th class="num">Used</th><th class="num">Pending</th><th class="num">Left</th><th>Medical</th></tr></thead>
+      <thead><tr><th>Staff</th><th>Class</th><th class="num">Vacation allowed</th><th class="num">Used</th><th class="num">Pending</th><th class="num">Left</th><th>Medical</th><th>Floating</th></tr></thead>
       <tbody id="balBody"></tbody>
     </table></div>
     <p class="hint">Vacation follows Handbook §08.A: weeks by classification and years of service, counted by work week: Class 1–3 work Sunday–Thursday (5 days a week; Fridays and Saturdays never count), Class 4 works Monday–Thursday (4 days a week; Fridays, Saturdays and Sundays never count). Unused days don't roll over past the caps. Medical for Class 3–4 is an estimate from months of service (1 day/month for Class 4, 1 day per 2 months for Class 3, max 30).</p>
@@ -212,7 +225,10 @@ body{margin:0}
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const CLASS={1:'Lead Pastor',2:'FT Pastoral',3:'PT Pastoral',4:'FT Support',5:'Temp/PT'};
-const TYPE={vacation:'Vacation',medical:'Medical',bereavement:'Bereavement',other:'Other',away:'Away'};
+const TYPE={vacation:'Vacation',medical:'Medical',bereavement:'Bereavement',floating:'Floating holiday',other:'Other',away:'Away'};
+let freeDays=[], holY=null;
+const getsHolidays=p=>p&&[1,2,4].includes(Number(p.cls));
+function freeFor(p){const m=new Map();freeDays.forEach(f=>{if(f.kind==='closed'||(f.kind==='holiday'&&getsHolidays(p)))m.set(f.date,f.name)});return m}
 let me={isAdmin:false,staffId:null,email:''}, staff=[], reqs=[];
 const today=new Date(); today.setHours(0,0,0,0);
 const YEAR=today.getFullYear();
@@ -232,7 +248,7 @@ function fmt(s){const d=parseD(s);return d?d.toLocaleDateString(undefined,{weekd
 function range(r){return r.start===r.end?fmt(r.start):fmt(r.start)+' – '+fmt(r.end)}
 const isPastoral=p=>p&&[1,2,3].includes(Number(p.cls));
 const workWeek=p=>isPastoral(p)?[0,1,2,3,4]:[1,2,3,4];
-function workdays(a,b,p){const s=parseD(a),e=parseD(b);if(!s||!e||e<s)return 0;const wk=workWeek(p);let n=0;for(const d=new Date(s);d<=e;d.setDate(d.getDate()+1)){if(wk.includes(d.getDay()))n++}return n}
+function workdays(a,b,p,skipped){const s=parseD(a),e=parseD(b);if(!s||!e||e<s)return 0;const wk=workWeek(p),free=freeFor(p);let n=0;for(const d=new Date(s);d<=e;d.setDate(d.getDate()+1)){if(!wk.includes(d.getDay()))continue;const k=iso(d);if(free.has(k)){if(skipped)skipped.push(free.get(k));continue}n++}return n}
 function yearsOf(p){const s=parseD(p.start);if(!s)return null;return (today-s)/31557600000+(Number(p.priorYears)||0)}
 function monthsOf(p){const s=parseD(p.start);if(!s)return null;return (today.getFullYear()-s.getFullYear())*12+today.getMonth()-s.getMonth()}
 function vacWeeks(p){const c=Number(p.cls),y=yearsOf(p);if(!c)return null;if(c===5)return 0;if(c===3)return 2;if(y===null)return null;
@@ -255,11 +271,13 @@ function show(tab){$$('.tab').forEach(b=>b.setAttribute('aria-selected',b.datase
 $('#tabs').addEventListener('click',e=>{const b=e.target.closest('.tab');if(b)show(b.dataset.tab)});
 
 function setDays(recount=true){const p=staff.find(s=>s.id===forId());const a=$('#rqStart').value,b=$('#rqEnd').value;
-  $('#rqDaysHint').textContent=(isPastoral(p)?'Sunday–Thursday count. Fridays and Saturdays don\'t.':'Monday–Thursday count. Fridays, Saturdays and Sundays don\'t.');
-  if(recount&&a&&b&&b>=a)$('#rqDays').value=workdays(a,b,p);balHint()}
+  const floating=$('#rqType').value==='floating';const skipped=[];
+  if(recount&&a&&b&&b>=a)$('#rqDays').value=floating?0:workdays(a,b,p,skipped);
+  $('#rqDaysHint').textContent=floating?'A floating holiday doesn\'t count against vacation.':(isPastoral(p)?'Sunday–Thursday count. Fridays and Saturdays don\'t.':'Monday–Thursday count. Fridays, Saturdays and Sundays don\'t.')+(skipped.length?' Not counted: '+[...new Set(skipped)].join(', ')+'.':'');
+  balHint()}
 $('#rqStart').addEventListener('change',()=>{if(!$('#rqEnd').value||$('#rqEnd').value<$('#rqStart').value)$('#rqEnd').value=$('#rqStart').value;setDays()});
 $('#rqEnd').addEventListener('change',setDays);
-$('#rqType').addEventListener('change',balHint);
+$('#rqType').addEventListener('change',()=>{if($('#rqType').value==='floating'&&$('#rqStart').value)$('#rqEnd').value=$('#rqStart').value;setDays()});
 $('#rqStaff').addEventListener('change',()=>{setDays();renderMine()});
 $('#rqDays').addEventListener('input',balHint);
 function balHint(){const p=staff.find(s=>s.id===forId());const el=$('#rqBal');if(!p||$('#rqType').value!=='vacation'){el.textContent='';return}
@@ -301,11 +319,11 @@ function renderOut(){const live=reqs.filter(r=>r.status!=='declined'&&r.end>=TOD
   const groups={};later.forEach(r=>{const k=parseD(r.start).toLocaleDateString(undefined,{month:'long',year:'numeric'});(groups[k]=groups[k]||[]).push(r)});
   $('#outList').innerHTML=Object.entries(groups).map(([k,rs])=>`<div class="month"><h3 style="margin-top:10px">${esc(k)}</h3>${rs.map(r=>reqItem(r,{showName:true})).join('')}</div>`).join('')}
 function renderBalances(){const body=$('#balBody');const rows=staff.filter(s=>s.active&&(me.isAdmin||s.id===me.staffId));
-  if(!rows.length){body.innerHTML='<tr><td colspan="7" class="empty">No balances to show yet.</td></tr>';return}
+  if(!rows.length){body.innerHTML='<tr><td colspan="8" class="empty">No balances to show yet.</td></tr>';return}
   body.innerHTML=rows.map(p=>{const v=vacSummary(p),m=medSummary(p);const pct=v.allow?Math.min(100,(v.used/v.allow)*100):0;
     return `<tr><td><strong>${esc(p.name)}</strong></td><td>${p.cls?esc(p.cls)+' · '+CLASS[p.cls]:'<span class="hint">Not set</span>'}</td>
     <td class="num">${v.allow===null?'<span class="hint">Needs setup</span>':v.allow+' days'}</td><td class="num">${v.used}</td><td class="num">${v.pend||'–'}</td>
-    <td class="num"><strong>${v.left===null?'–':v.left}</strong>${v.allow?`<div class="bar"><span style="width:${pct}%"></span></div>`:''}</td><td>${esc(m.text)}${m.used?` <span class="hint">(${m.used} used)</span>`:''}</td></tr>`}).join('')}
+    <td class="num"><strong>${v.left===null?'–':v.left}</strong>${v.allow?`<div class="bar"><span style="width:${pct}%"></span></div>`:''}</td><td>${esc(m.text)}${m.used?` <span class="hint">(${m.used} used)</span>`:''}</td><td>${getsHolidays(p)?(reqs.some(r=>r.staffId===p.id&&r.type==='floating'&&r.status!=='declined'&&String(r.start).slice(0,4)==String(YEAR))?'Used':'1 left'):'<span class="hint">—</span>'}</td></tr>`}).join('')}
 function renderApprovals(){const pend=reqs.filter(r=>r.status==='pending').sort((a,b)=>a.start.localeCompare(b.start));
   $('#pendCount').textContent=pend.length;$('#pendCount').hidden=!pend.length;
   $('#apprList').innerHTML=pend.length?pend.map(r=>{const p=staff.find(s=>s.id===r.staffId);let warn='';
@@ -323,21 +341,18 @@ function renderStaff(){const b=$('#staffBody');if(document.activeElement&&b.cont
    <td><div class="pwcell"><input id="pw-${esc(s.id)}" type="password" autocomplete="new-password" placeholder="${s.hasPassword?'New password':'Starting password'}" aria-label="Password for ${esc(s.name)}"><button class="btn" type="button" data-setpw="${esc(s.id)}">Set</button></div>
      <span class="hint">${s.hasPassword?(s.mustChange?'Waiting for them to choose their own':'Set'):'Not set yet'}</span></td>
    <td><button class="btn" type="button" data-remove="${esc(s.id)}">${s.active?'Remove':'Restore'}</button></td></tr>`).join(''):'<tr><td colspan="7" class="empty">No staff yet. Use "Add staff member" below.</td></tr>'}
-function nthWeekday(y,m,wd,n){const d=new Date(y,m,1);d.setDate(1+((wd-d.getDay()+7)%7)+7*(n-1));return d}
-function lastWeekday(y,m,wd){const d=new Date(y,m+1,0);d.setDate(d.getDate()-((d.getDay()-wd+7)%7));return d}
-function easter(y){const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),mo=Math.floor((h+l-7*m+114)/31),da=((h+l-7*m+114)%31)+1;return new Date(y,mo-1,da)}
-function renderHolidays(){const y=(today.getMonth()===11&&today.getDate()>26)?YEAR+1:YEAR;$('#holYear').textContent=y;
-  const f=d=>d.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
-  const tg=nthWeekday(y,10,4,4);const rows=[
-    ['New Year’s Day',1,f(new Date(y,0,1))],
-    ['Easter',1,'Easter Sunday is '+f(easter(y))],
-    ['Memorial Day',1,f(lastWeekday(y,4,1))],
-    ['Independence Day',1,f(new Date(y,6,4))],
-    ['Labor Day',1,f(nthWeekday(y,8,1,1))],
-    ['Thanksgiving',2,'Thanksgiving Day is '+f(tg)],
-    ['Christmas',2,'Christmas Day is '+f(new Date(y,11,25))],
-    ['Floating holiday',1,'Your choice, set with the lead pastor']];
-  $('#holBody').innerHTML=rows.map(r=>`<tr><td><strong>${r[0]}</strong></td><td class="num">${r[1]}</td><td>${r[2]}</td></tr>`).join('')}
+function renderHolidays(){const y=holY||YEAR;$('#holYear').textContent=y;
+  const rows=freeDays.filter(f=>f.date.slice(0,4)==String(y));$('#holActHead').hidden=!me.isAdmin;$('#holForm').hidden=!me.isAdmin;
+  $('#holBody').innerHTML=rows.length?rows.map(f=>`<tr><td>${esc(fmt(f.date))}</td><td><strong>${esc(f.name)}</strong></td><td><span class="pill ${f.kind==='closed'?'approved':'type'}">${f.kind==='closed'?'Office closed':'Paid holiday'}</span></td>${me.isAdmin?`<td><button class="btn" type="button" data-delfree="${esc(f.date)}">Remove</button></td>`:''}</tr>`).join(''):`<tr><td colspan="4" class="empty">No holidays or closures for ${y}.</td></tr>`}
+async function loadFree(){const y=holY||YEAR;try{freeDays=await api('freedays?year='+y)}catch(e){}}
+$('#holPrev').addEventListener('click',async()=>{holY=(holY||YEAR)-1;await loadFree();renderHolidays()});
+$('#holNext').addEventListener('click',async()=>{holY=(holY||YEAR)+1;await loadFree();renderHolidays()});
+$('#holBody').addEventListener('click',async e=>{const b=e.target.closest('[data-delfree]');if(!b)return;b.disabled=true;
+  try{await api('freedays/'+b.dataset.delfree,{method:'DELETE'});$('#hlMsg').textContent='Removed. Any requests on that day were recounted.';await load()}catch(err){$('#hlMsg').textContent=err.message;b.disabled=false}});
+$('#holForm').addEventListener('submit',async e=>{e.preventDefault();$('#hlBtn').disabled=true;
+  try{const r=await api('freedays',{method:'POST',body:JSON.stringify({start:$('#hlStart').value,end:$('#hlEnd').value||$('#hlStart').value,name:$('#hlName').value,kind:$('#hlKind').value})});
+    $('#hlMsg').textContent=`Added ${r.added} day${r.added===1?'':'s'}. Any requests on those days were recounted.`;holY=+$('#hlStart').value.slice(0,4);$('#holForm').reset();await load()}
+  catch(err){$('#hlMsg').textContent=err.message}$('#hlBtn').disabled=false});
 function renderAll(){renderHolidays();renderWho();renderMine();renderOut();renderBalances();if(me.isAdmin){renderApprovals();renderStaff()}setDays(false)}
 
 document.addEventListener('click',async e=>{const b=e.target.closest('[data-act]');if(!b)return;const id=b.dataset.id,act=b.dataset.act;b.disabled=true;
@@ -356,7 +371,7 @@ $('#staffBody').addEventListener('click',async e=>{const b=e.target.closest('[da
 $('#addStaff').addEventListener('click',async()=>{try{await api('staff',{method:'POST',body:JSON.stringify({name:'New staff member'})});$('#staffMsg').textContent='Added. Fill in the details above.';await load()}catch(err){$('#staffMsg').textContent=err.message}});
 
 async function load(){
-  try{[staff,reqs]=await Promise.all([api('staff'),api('requests')]);if($('#status').classList.contains('bad')||$('#status').textContent==='Loading…')status('');renderAll()}
+  try{[staff,reqs]=await Promise.all([api('staff'),api('requests'),loadFree()]);if($('#status').classList.contains('bad')||$('#status').textContent==='Loading…')status('');renderAll()}
   catch(err){if(err.status===401){showLogin();return}status(err.message,'bad')}}
 
 let saved='request';try{saved=localStorage.getItem('nw-tab')||'request'}catch(e){}
