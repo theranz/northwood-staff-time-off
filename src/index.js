@@ -12,10 +12,10 @@ const LOCK_MINUTES = 15;
 const COOKIE = "nw_session";
 
 // Which days count against time off, by staff classification (0 = Sunday ... 6 = Saturday).
-// Class 1–2 (pastoral): Sunday–Thursday. Fridays and Saturdays never count.
-// Class 3–5 (part-time pastoral, support, temporary): Monday–Thursday. Fri, Sat and Sun never count.
+// Class 1–3 (pastoral, full- and part-time): Sunday–Thursday. Fridays and Saturdays never count.
+// Class 4–5 (support, temporary): Monday–Thursday. Fridays, Saturdays and Sundays never count.
 const WORKDAYS = { pastoral: [0, 1, 2, 3, 4], other: [1, 2, 3, 4] };
-const workdaysFor = (cls) => (Number(cls) === 1 || Number(cls) === 2 ? WORKDAYS.pastoral : WORKDAYS.other);
+const workdaysFor = (cls) => ([1, 2, 3].includes(Number(cls)) ? WORKDAYS.pastoral : WORKDAYS.other);
 function countDays(start, end, cls) {
   const days = workdaysFor(cls);
   const [y1, m1, d1] = start.split("-").map(Number);
@@ -252,14 +252,8 @@ export default {
           if (b.end.slice(0, 4) - b.start.slice(0, 4) > 1) return fail("That date range is too long.");
           const who = await env.DB.prepare("SELECT cls FROM staff WHERE id = ? AND active = 1").bind(staffId).first();
           if (!who) return fail("That staff member isn't on the list.");
-          // Days are always counted from the staff member's work week. Pastors may enter a different
-          // number (for a half day, say); everyone else gets the counted number.
-          let days = countDays(b.start, b.end, who.cls);
-          if (me.isAdmin && b.days !== undefined && b.days !== null && b.days !== "") {
-            const d = Number(b.days);
-            if (!(d >= 0 && d <= 60)) return fail("Days used must be between 0 and 60.");
-            days = d;
-          }
+          // Days are always counted from the staff member's work week, in whole days. Nobody can change the count.
+          const days = countDays(b.start, b.end, who.cls);
           const rid = newId();
           await env.DB.prepare("INSERT INTO requests (id,staff_id,type,start,end,days,note,status,created_at) VALUES (?,?,?,?,?,?,?,'pending',?)")
             .bind(rid, staffId, b.type, b.start, b.end, days, String(b.note || "").slice(0, 500), new Date().toISOString())

@@ -27,7 +27,11 @@ To add or remove approvers, edit `ADMIN_EMAILS` in `wrangler.jsonc` and commit.
 
 ## How days are counted
 
-Days are counted automatically from each person's work week. Staff can't change the count; pastors can adjust it (for a half day, say).
+Days are counted automatically from each person's work week, in whole days. Nobody can change the count, and there are no half days.
 
-- **Class 1–2 (pastoral):** Sunday–Thursday. A vacation week is 5 days. Fridays and Saturdays never count.
-- **Class 3–4 (part-time pastoral, support):** Monday–Thursday. A vacation week is 4 days. Fridays, Saturdays and Sundays never count.
+- **Class 1–3 (pastoral, full- and part-time):** Sunday–Thursday. A vacation week is 5 days. Fridays and Saturdays never count.
+- **Class 4 (full-time support):** Monday–Thursday. A vacation week is 4 days. Fridays, Saturdays and Sundays never count.
+
+## Holidays
+
+The Holidays tab lists the ten paid holidays from Handbook §08.B (Class 1, 2 and 4), with this year's dates worked out automatically.
